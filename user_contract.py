@@ -3,7 +3,7 @@ import smartpy as sp
 class User(sp.Contract):
     def __init__(self):
         self.init(
-            admins = sp.list(l=[sp.address("tz1233x1")],t=sp.TAddress),
+            admins = sp.set(l=[sp.address("tz123321")],t=sp.TAddress),
             users = sp.big_map(
                 tkey = sp.TAddress,
                 tvalue = sp.TRecord(
@@ -14,29 +14,16 @@ class User(sp.Contract):
                 )
             ),
         )
-    
-    ######xxxxxxx   NOT WORKING    xxxxxx############
-
-    # Utilary Function to check if an element is present in a list
-    @sp.private_lambda(with_storage="read-only")
-    def contains_in_list(self,src):
-        flag = sp.bool(False)
-        sp.for i in self.data.admins:
-            sp.if src == i:
-                flag = True
-        sp.result(flag)
-    a
-    ######xxxxxxx   NOT WORKING    xxxxxx############
 
 # ################################ ADD NEW ADMIN ####################################            
     @sp.entry_point
     def add_admin(self,params):
         sp.set_type(params.new_admin_address,sp.TAddress)
 
-        sp.verify(self.contains_in_list(sp.source) == True, message = "Entrypoint called by non-admin user")
-        sp.verify(self.contains_in_list(params.new_admin_address) == False, message = "This address already has admin privileges")
+        sp.verify(self.data.admins.contains(sp.source), message = "Entrypoint called by non-admin user")
+        sp.verify(self.data.admins.contains(params.new_admin_address) == False, message = "This address already has admin privileges")
         
-        self.data.admins.push(params.new_admin_address)
+        self.data.admins.add(params.new_admin_address)
 
 # ################################ ADD NEW USER ####################################
     @sp.entry_point
@@ -45,7 +32,7 @@ class User(sp.Contract):
         sp.set_type(params.user_name,sp.TString)
         sp.set_type(params.profile_picture,sp.TString)
 
-        # sp.verify(self.contains_in_list(self.data.admins,sp.source) == True, message = "Entrypoint called by non-admin user")        
+        sp.verify(sp.source==params.user_address, message = "Only user can create his own account")        
         sp.verify(self.data.users.contains(params.user_address)==False,message = "User already exists with this wallet address")
         
         self.data.users[params.user_address] = sp.record(
@@ -88,31 +75,32 @@ class User(sp.Contract):
         sp.set_type(params.user_address,sp.TAddress)
         sp.set_type(params.badge_id,sp.TString)
         
-        # Check if the user ID provided actually exists in our database
-        sp.verify(self.contains_in_list(sp.source) == True,message="Entrypoint called by non-admin user")
-        # sp.verify(self.contains_in_list(self.data.admins,sp.source) == False,message="Entrypoint called by non-admin user")
+        sp.verify(self.data.admins.contains(sp.source),message="Entrypoint called by non-admin user")
         
         # Push the badge id to the user_badges list.
         self.data.users[params.user_address].user_badges.push(params.badge_id)   
 
 
 
+# ################################ Test Scenarios #################################    
 @sp.add_test(name="user_test1")
 def test():
     scenario = sp.test_scenario()
     
+    defalt_admin_address = sp.address("tz123321")
     admin1 = sp.test_account("admin1")
-    admin2 = sp.test_account("admin2")
+    game1 = sp.test_account("game1")
     
     mark = sp.test_account("mark")
     elon = sp.test_account("elon")
     
     user_contract = User()
     scenario += user_contract
-    scenario += user_contract.add_user(user_address=mark.address,user_name = sp.string("User_1"), profile_picture = sp.string("https://ipfs.com/xvSDfdcD/aMasdSDdcxdSDFssdaXds")).run(source=admin1.address)
+    
+    scenario += user_contract.add_user(user_address=mark.address,user_name = sp.string("User_1"), profile_picture = sp.string("https://ipfs.com/xvSDfdcD/aMasdSDdcxdSDFssdaXds")).run(source=mark.address)
     scenario += user_contract.update_username(user_address=mark.address,new_user_name = sp.string("User 1")).run(source=mark.address)
     scenario += user_contract.update_profile_picture(user_address=mark.address,ipfs_url = sp.string("https://ipfs.com/aaaaaa/aMasdSDdcxdSDFssdaXds")).run(source=mark.address)
-    scenario += user_contract.add_badge(user_address=mark.address,badge_id = sp.string("First Blood")).run(source=admin1.address)
-    scenario += user_contract.add_admin(new_admin_address=admin2.address).run(source=admin1.address)
     
-
+    scenario += user_contract.add_admin(new_admin_address=game1.address).run(source=sp.address("tz123321"))
+    
+    scenario += user_contract.add_badge(user_address=mark.address,badge_id = sp.string("First Blood")).run(source=game1.address)
