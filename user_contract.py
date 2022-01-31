@@ -1,14 +1,16 @@
 import smartpy as sp
 
 class User(sp.Contract):
-    def __init__(self):
+    def __init__(self,admin_address):
         self.init(
-            admins = sp.set(l=[sp.address("tz123321")],t=sp.TAddress),
+            admins = sp.set(l=[admin_address],t=sp.TAddress),
             users = sp.big_map(
                 tkey = sp.TAddress,
                 tvalue = sp.TRecord(
                     user_name = sp.TString, #Unique string for each user
                     user_level = sp.TNat,
+                    user_tier = sp.TString,
+                    user_xp = sp.TNat,
                     user_badges = sp.TList(sp.TString), #List of NFT IDs
                     profile_picture = sp.TString
                 )
@@ -38,6 +40,8 @@ class User(sp.Contract):
         self.data.users[params.user_address] = sp.record(
             user_name = params.user_name, 
             user_level = sp.nat(0),
+            user_tier = "",
+            user_xp = sp.nat(0),
             user_badges = sp.list(),
             profile_picture = params.profile_picture
         )
@@ -80,27 +84,47 @@ class User(sp.Contract):
         # Push the badge id to the user_badges list.
         self.data.users[params.user_address].user_badges.push(params.badge_id)   
 
+# ################################ Add XP ####################################            
+    @sp.entry_point
+    def add_xp(self,params):
+        sp.set_type(params.user_address,sp.TAddress)
+        sp.set_type(params.additional_xp,sp.TNat)
 
+        sp.verify(self.data.admins.contains(sp.source), message = "Entrypoint called by non-admin user")
+
+        self.data.users[params.user_address].user_xp += params.additional_xp
+
+
+# ################################ Increment level ####################################            
+    @sp.entry_point
+    def incr_level(self,params):
+        sp.set_type(params.user_address,sp.TAddress)
+
+        sp.verify(self.data.admins.contains(sp.source), message = "Entrypoint called by non-admin user")
+
+        self.data.users[params.user_address].user_level += 1
 
 # ################################ Test Scenarios #################################    
 @sp.add_test(name="user_test1")
 def test():
     scenario = sp.test_scenario()
     
-    defalt_admin_address = sp.address("tz123321")
+    
     admin1 = sp.test_account("admin1")
     game1 = sp.test_account("game1")
     
     mark = sp.test_account("mark")
     elon = sp.test_account("elon")
     
-    user_contract = User()
+    user_contract = User(admin1.address)
     scenario += user_contract
     
     scenario += user_contract.add_user(user_address=mark.address,user_name = sp.string("User_1"), profile_picture = sp.string("https://ipfs.com/xvSDfdcD/aMasdSDdcxdSDFssdaXds")).run(source=mark.address)
+    scenario += user_contract.add_user(user_address=elon.address,user_name = sp.string("User_2"), profile_picture = sp.string("https://ipfs.com/xvSDfdcD/aMasdSDdcxdSDFssdaXds")).run(source=elon.address)
     scenario += user_contract.update_username(user_address=mark.address,new_user_name = sp.string("User 1")).run(source=mark.address)
     scenario += user_contract.update_profile_picture(user_address=mark.address,ipfs_url = sp.string("https://ipfs.com/aaaaaa/aMasdSDdcxdSDFssdaXds")).run(source=mark.address)
     
-    scenario += user_contract.add_admin(new_admin_address=game1.address).run(source=sp.address("tz123321"))
-    
-    scenario += user_contract.add_badge(user_address=mark.address,badge_id = sp.string("First Blood")).run(source=game1.address)
+    scenario += user_contract.add_admin(new_admin_address=game1.address).run(source=admin1.address)
+    scenario += user_contract.add_xp(user_address=mark.address,additional_xp = 100).run(source=game1.address)
+    scenario += user_contract.incr_level(user_address=mark.address).run(source=game1.address)
+    # scenario += user_contract.add_badge(user_address=mark.address,badge_id = sp.string("First Blood")).run(source=game1.address)
