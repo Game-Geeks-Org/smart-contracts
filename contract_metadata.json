@@ -1,0 +1,17 @@
+{
+    "name": "Game Geeks",
+    "description": "Game Geeks Token",
+    "version": "1.0",
+    "interfaces": ["TZIP-012", "TZIP-016"],
+    "license": {
+        "name": "MIT",
+        "details": "The MIT License"
+    },
+    "tokenCategory": "gaming",
+    "author": "@GameGeeks <gamegeeks.online>",
+    "homepage": "gamegeeks.online <gamegeeks.online>",
+    "source": {
+        "tools": ["smartpy", "taquito", "pinata", "reactjs", "temple wallet"],
+        "location": "https://github.com/Game-Geeks-Org"
+    }
+}
