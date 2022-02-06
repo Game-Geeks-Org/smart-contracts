@@ -21,9 +21,11 @@ def test():
     
     geekcoin = GameGeeksToken(
         admin1.address, # Update the admin address before deployement to the chain. 
-        config = FA12.FA12_config(),
+        config = FA12.FA12_config(support_upgradable_metadata= True),
         token_metadata = token_metadata,
-        contract_metadata = sp.utils.metadata_of_url("ipfs://bafkreicysfopd2fnmytjgsagdk555mh6d2npfqrbtlbxfj7srwzayd2maq")
+        contract_metadata = {
+            '': "ipfs://bafkreicysfopd2fnmytjgsagdk555mh6d2npfqrbtlbxfj7srwzayd2maq"
+        }
     )
     # IPFS Hash for contract_metadata: bafkreicysfopd2fnmytjgsagdk555mh6d2npfqrbtlbxfj7srwzayd2maq
     scenario = sp.test_scenario()   
