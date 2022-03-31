@@ -36,7 +36,7 @@ class User(sp.Contract):
         sp.set_type(params.user_name,sp.TString)
         sp.set_type(params.profile_picture,sp.TString)
 
-        sp.verify(sp.sender==params.user_address, message = "Only user can create his own account")
+        # sp.verify(sp.sender==params.user_address, message = "Only user can create his own account")
         sp.verify(self.data.users.contains(params.user_address)==False,message = "User already exists with this wallet address")
         
         self.data.users[params.user_address] = sp.record(
