@@ -33,9 +33,35 @@ class Game_types:
             name=sp.TString,
             admin=sp.TAddress,
             description=sp.TString
-        )
+        ) 
     
+    def update_description_type():
+        return sp.TRecord(
+            game_address=sp.TAddress,
+            description=sp.TString
+        ) 
     
+    def set_is_active_type():
+        return sp.TRecord(
+            game_address=sp.TAddress,
+            is_active=sp.TBool
+        ) 
+    def add_admin_to_a_game_type():
+        return sp.TRecord(
+            game_address=sp.TAddress,
+            new_admin_address=sp.TAddress
+        ) 
+    def add_admin_to_game_contract_type():
+        return sp.TRecord( 
+            new_admin_address=sp.TAddress
+        ) 
+    def update_total_value_locked_type():
+        return sp.TRecord( 
+            game_address=sp.TAddress,
+            new_value=sp.TNat
+        ) 
+    
+
 
 class User(sp.Contract):
     def __init__(self,admin_address):
@@ -215,7 +241,7 @@ class Game(sp.Contract):
         sp.set_type(params.description,sp.TString)
 
         sp.verify(self.data.games.contains(params.game_address), message = "Game doesnot exist with this address")
-        sp.verify(self.data.games[params.game_address].admins.contains(sp.source), message = "Game doesnot exist with this address")
+        sp.verify(self.data.games[params.game_address].admins.contains(sp.source), message = "Source != Game Admin")
 
         self.data.games[params.game_address].description = params.description
 
@@ -276,7 +302,7 @@ class Game(sp.Contract):
         self.data.games[params.game_address].number_of_games_played += 1
 
 
-###########################################################################################################################
+###############################################################    game_address=sp.TAddress,############################################################
 ################################################### Proxy Contract ########################################################
 ###########################################################################################################################
 
@@ -357,7 +383,7 @@ class Proxy_contract(sp.Contract):
                 game_address = params.game_address        
             ),sp.mutez(0), user_contract
         )
-
+    
 ################################ Account Management End ##################################
 
 
@@ -376,6 +402,82 @@ class Proxy_contract(sp.Contract):
             sp.mutez(0), games_contract
         )
     
+    ################################## Update description ####################################
+    @sp.entry_point
+    def update_game_description(self,params):
+        sp.set_type_expr(params,Game_types.update_description_type())
+        games_contract = sp.contract(Game_types.update_description_type(),self.data.games_contract_address,entry_point = "update_description").open_some()
+        sp.transfer(
+            sp.record(
+                game_address = params.game_address,
+                description = params.description
+            ),
+            sp.mutez(0), games_contract
+        )
+
+# ################################## Update is_active ####################################
+    @sp.entry_point
+    def set_game_is_active(self,params):
+        sp.set_type_expr(params,Game_types.set_is_active_type())
+        games_contract = sp.contract(Game_types.set_is_active_type(),self.data.games_contract_address,entry_point = "set_is_active").open_some()
+        sp.transfer(
+            sp.record(
+                game_address = params.game_address,
+                is_active = params.is_active
+            ),
+            sp.mutez(0), games_contract
+        )
+        
+# ################################### ADD NEW ADMIN ####################################            
+    @sp.entry_point
+    def add_admin_to_a_game(self,params):
+        sp.set_type_expr(params,Game_types.add_admin_to_a_game_type())
+        games_contract = sp.contract(Game_types.add_admin_to_a_game_type(),self.data.games_contract_address,entry_point = "add_admin_to_a_game").open_some()
+        sp.transfer(
+            sp.record(
+                game_address = params.game_address,
+                new_admin_address = params.new_admin_address
+            ),
+            sp.mutez(0), games_contract
+        )
+
+#  # ################################ ADD NEW ADMIN TO CONTRACT####################################            
+    @sp.entry_point
+    def add_admin_to_game_contract(self,params):
+        sp.set_type_expr(params,Game_types.add_admin_to_game_contract_type())
+        games_contract = sp.contract(Game_types.add_admin_to_game_contract_type(),self.data.games_contract_address,entry_point = "add_admin_to_contract").open_some()
+        sp.transfer(
+            sp.record(
+                new_admin_address = params.new_admin_address
+            ),
+            sp.mutez(0), games_contract
+        )
+        
+# # ################################ update total value locked ####################################            
+    @sp.entry_point
+    def update_total_value_locked(self,params):
+        sp.set_type_expr(params,Game_types.update_total_value_locked_type())
+        games_contract = sp.contract(Game_types.update_total_value_locked_type(),self.data.games_contract_address,entry_point = "update_total_value_locked").open_some()
+        sp.transfer(
+            sp.record(
+                game_address = params.game_address,
+                new_value = params.new_value
+            ),
+            sp.mutez(0), games_contract
+        )
+
+
+# # ################################ increment number of games ####################################            
+    @sp.entry_point
+    def incr_number_of_games_played(self,params):
+        sp.set_type(params.game_address,sp.TAddress)
+        games_contract = sp.contract(sp.TRecord(game_address = sp.TAddress),self.data.games_contract_address,entry_point = "incr_number_of_games_played").open_some()
+        sp.transfer(
+            sp.record(
+                game_address = params.game_address,
+            ),
+            sp.mutez(0), games_contract
+        )
     
 ################################ Game Management End ##################################
 
@@ -420,6 +522,7 @@ def test():
     scenario = sp.test_scenario()
 
     admin1 = sp.test_account("admin1")
+    admin2 = sp.test_account("admin2")
     fa12_contract = sp.test_account("gamegeekcoin")
     ingame_tkn_contract = sp.test_account("ingameNFT")
     display_tkn_contract = sp.test_account("displayNFT")
@@ -462,17 +565,40 @@ def test():
             profile_picture = sp.string("ipfs://adsafndaskdlfdjfkldsl")
         ).run(source = mark.address)
 
-    scenario += proxy_contract.update_username(
-            user_address = mark.address, 
-            new_user_name = sp.string("Marker"),
-        ).run(source = mark.address)
+    # scenario += proxy_contract.update_username(
+    #         user_address = mark.address, 
+    #         new_user_name = sp.string("Marker"),
+    #     ).run(source = mark.address)
 
-    scenario += proxy_contract.update_profile_picture(
-            user_address = mark.address, 
-            ipfs_url = sp.string("ProfilePic"),
-        ).run(source = mark.address)
+    # scenario += proxy_contract.update_profile_picture(
+    #         user_address = mark.address, 
+    #         ipfs_url = sp.string("ProfilePic"),
+    #     ).run(source = mark.address)
 
     scenario += user_contract.add_game_to_user(
             user_address = mark.address, 
             game_address = game1.address, 
+        ).run(source = admin1.address)
+    
+    scenario += proxy_contract.set_game_is_active(
+            game_address = game1.address,
+            is_active = sp.bool(True),
+        ).run(source = admin1.address)
+
+    scenario += proxy_contract.add_admin_to_a_game(
+            game_address = game1.address,
+            new_admin_address = admin2.address,
+        ).run(source = admin1.address)
+
+    scenario += proxy_contract.add_admin_to_game_contract(
+            new_admin_address = admin2.address,
+        ).run(source = admin1.address)
+
+    scenario += proxy_contract.update_total_value_locked(
+            game_address = game1.address,
+            new_value = sp.nat(10),
+        ).run(source = admin1.address)
+
+    scenario += proxy_contract.incr_number_of_games_played(
+            game_address = game1.address,
         ).run(source = admin1.address)
