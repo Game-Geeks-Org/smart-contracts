@@ -1,4 +1,3 @@
-from pydoc import describe
 import smartpy as sp
 
 class Game(sp.Contract):
@@ -72,8 +71,9 @@ class Game(sp.Contract):
         sp.set_type(params.new_admin_address,sp.TAddress)
         sp.set_type(params.game_address,sp.TAddress)
 
-        sp.verify(self.data.admins.contains(sp.source), message = "Entrypoint called by non-admin user")
-        sp.verify(self.data.admins.contains(params.new_admin_address) == False, message = "This address already has admin privileges")
+        sp.verify(self.data.games.contains(params.game_address), message = "Game doesnot exist with this address")
+        sp.verify(self.data.games[params.game_address].admins.contains(sp.source), message = "Entrypoint called by non-admin user")
+        sp.verify(self.data.games[params.game_address].admins.contains(params.new_admin_address) == False, message = "This address already has admin privileges")
         
         self.data.games[params.game_address].admins.add(params.new_admin_address)
 
@@ -114,9 +114,11 @@ def test():
     scenario = sp.test_scenario()
 
     admin1 = sp.test_account("admin1")
+    admin2 = sp.test_account("admin2")
     
     game_admin1 = sp.test_account("game_admin1")
     game_admin2 = sp.test_account("game_admin2")
+    game2_admin = sp.test_account("game2_admin")
     
     game1 = sp.test_account("game1")
     game2 = sp.test_account("game2")
@@ -126,12 +128,33 @@ def test():
     game_contract = Game(admin1.address)    
 
     scenario += game_contract
-
-    scenario += game_contract.add_game(admin = game_admin1.address,game_address = game1.address,name = sp.string("Space Shooter"), description = sp.string("Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem ")).run(sender = game1)
-
-    scenario += game_contract.set_is_active(game_address = game1.address, is_active = True).run(sender = game_admin1)
     
-    scenario += game_contract.update_total_value_locked(game_address = game1.address, new_value = sp.nat(10)).run(sender = game_admin1)
+    scenario += game_contract.add_game(admin = game_admin1.address,game_address = game1.address,name = sp.string("Space Shooter"), description = sp.string("Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem ")).run(sender = mark,valid = False)
+    scenario += game_contract.add_game(admin = game_admin1.address,game_address = game1.address,name = sp.string("Space Shooter"), description = sp.string("Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem ")).run(sender = game1,valid = True)
+    scenario += game_contract.add_game(admin = game_admin1.address,game_address = game1.address,name = sp.string("Space Shooter"), description = sp.string("Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem ")).run(sender = game1,valid = False)
+    scenario += game_contract.add_game(admin = game2_admin.address,game_address = game2.address,name = sp.string("Subway Surfers"), description = sp.string("Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem Lorem ipsm Dorem ")).run(sender = game2,valid = True)
     
-    scenario += game_contract.incr_number_of_games_played(game_address = game1.address).run(sender = game_admin1)
+
+    scenario += game_contract.add_admin_to_contract(new_admin_address = admin1.address).run(sender = admin1.address,valid = False) 
+    scenario += game_contract.add_admin_to_contract(new_admin_address = admin1.address).run(sender = mark.address,valid = False) 
+    scenario += game_contract.add_admin_to_contract(new_admin_address = admin2.address).run(sender = admin1.address,valid = True) 
+
+    scenario += game_contract.add_admin_to_a_game(new_admin_address = game_admin1.address,game_address = mark.address).run(sender = game_admin1.address, valid = False) 
+    scenario += game_contract.add_admin_to_a_game(new_admin_address = game_admin1.address,game_address = game1.address).run(sender = game_admin1.address, valid = False) 
+    scenario += game_contract.add_admin_to_a_game(new_admin_address = game_admin2.address,game_address = game1.address).run(sender = mark.address, valid = False) 
+    scenario += game_contract.add_admin_to_a_game(new_admin_address = game_admin2.address,game_address = game1.address).run(sender = game_admin1.address,valid = True) 
+
+    scenario += game_contract.set_is_active(game_address = mark.address, is_active = True).run(sender = mark,valid = False)
+    scenario += game_contract.set_is_active(game_address = game1.address, is_active = True).run(sender = mark,valid = False)
+    scenario += game_contract.set_is_active(game_address = game1.address, is_active = True).run(sender = game_admin1,valid = True)
+    
+    scenario += game_contract.update_total_value_locked(game_address = mark.address, new_value = sp.nat(10)).run(sender = game_admin1,valid = False)
+    scenario += game_contract.update_total_value_locked(game_address = game1.address, new_value = sp.nat(10)).run(sender = mark,valid = False)
+    scenario += game_contract.update_total_value_locked(game_address = game1.address, new_value = sp.nat(10)).run(sender = game_admin1,valid = True)
+    scenario += game_contract.update_total_value_locked(game_address = game2.address, new_value = sp.nat(40)).run(sender = game2_admin,valid = True)
+    
+    scenario += game_contract.incr_number_of_games_played(game_address = game1.address).run(sender = game_admin1,valid = True)
+    scenario += game_contract.incr_number_of_games_played(game_address = game1.address).run(sender = game_admin1,valid = True)
+    scenario += game_contract.incr_number_of_games_played(game_address = game1.address).run(sender = game2_admin,valid = False)
+    scenario += game_contract.incr_number_of_games_played(game_address = game2.address).run(sender = game2_admin,valid = True)
     
