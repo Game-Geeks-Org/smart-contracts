@@ -327,7 +327,7 @@ class Ingame_token(FA2.FA2):
         fa12_contract = sp.contract(Ingame_tkn_types.get_market_transfer_type(),self.data.fa12_contract_address,entry_point = "market_transfer").open_some() 
         sp.transfer(sp.record
                             (
-                                fa2_contract_address = self.address,
+                                fa2_contract_address = sp.self_address,
                                 price_in_gage = sale.price_in_gage,
                                 buyer = params.buyer,
                                 seller = sale.seller 

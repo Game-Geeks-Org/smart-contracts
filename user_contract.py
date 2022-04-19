@@ -121,7 +121,7 @@ class User(sp.Contract):
 # ################################ Test Scenarios #################################    
 @sp.add_test(name="user_test1")
 def test():
-    scenario = sp.test_scenario()
+    scenario1 = sp.test_scenario()
     
     admin1 = sp.test_account("admin1")
     game1 = sp.test_account("game1")
@@ -132,15 +132,29 @@ def test():
     proxy = sp.test_account("proxy")
 
     user_contract = User(admin1.address,proxy.address)
-    scenario += user_contract
+    scenario1 += user_contract
     
-    scenario += user_contract.add_user(user_address=mark.address,user_name = sp.string("User_1"), profile_picture = sp.string("https://ipfs.com/xvSDfdcD/aMasdSDdcxdSDFssdaXds")).run(sender=mark.address)
-    scenario += user_contract.add_user(user_address=elon.address,user_name = sp.string("User_2"), profile_picture = sp.string("https://ipfs.com/xvSDfdcD/aMasdSDdcxdSDFssdaXds")).run(sender=elon.address)
-    scenario += user_contract.update_username(user_address=mark.address,new_user_name = sp.string("User 1")).run(source=mark.address)
-    scenario += user_contract.update_profile_picture(user_address=mark.address,ipfs_url = sp.string("https://ipfs.com/aaaaaa/aMasdSDdcxdSDFssdaXds")).run(source=mark.address)
+    scenario1 += user_contract.add_user(user_address=mark.address,user_name = sp.string("User_1"), profile_picture = sp.string("https://ipfs.com/xvSDfdcD/aMasdSDdcxdSDFssdaXds")).run(sender=mark.address)
+    scenario1 += user_contract.add_user(user_address=elon.address,user_name = sp.string("User_2"), profile_picture = sp.string("https://ipfs.com/xvSDfdcD/aMasdSDdcxdSDFssdaXds")).run(sender=elon.address)
+    scenario1 += user_contract.add_user(user_address=elon.address,user_name = sp.string("User_2"), profile_picture = sp.string("https://ipfs.com/xvSDfdcD/aMasdSDdcxdSDFssdaXds")).run(sender=mark.address, valid = False)
     
-    scenario += user_contract.add_admin(new_admin_address=game1.address).run(source=admin1.address)
-    scenario += user_contract.add_xp(user_address=mark.address,additional_xp = 100).run(source=game1.address)
-    scenario += user_contract.incr_level(user_address=mark.address).run(source=game1.address)
-    scenario += user_contract.add_badge(user_address=mark.address,badge_id = sp.string("First Blood")).run(source=game1.address)
-    scenario += user_contract.add_game_to_user(user_address=mark.address,game_address = game1.address).run(source=admin1.address)
+    scenario1 += user_contract.update_username(user_address=mark.address,new_user_name = sp.string("User 1")).run(source=mark.address)
+    scenario1 += user_contract.update_username(user_address=mark.address,new_user_name = sp.string("User 1")).run(source=elon.address,valid = False)
+    
+    scenario1 += user_contract.update_profile_picture(user_address=mark.address,ipfs_url = sp.string("https://ipfs.com/aaaaaa/aMasdSDdcxdSDFssdaXds")).run(source=mark.address)
+    scenario1 += user_contract.update_profile_picture(user_address=mark.address,ipfs_url = sp.string("https://ipfs.com/aaaaaa/aMasdSDdcxdSDFssdaXds")).run(source=elon.address,valid = False)
+    
+    scenario1 += user_contract.add_admin(new_admin_address=game1.address).run(source=admin1.address)
+    scenario1 += user_contract.add_admin(new_admin_address=game1.address).run(source=mark.address,valid = False)
+
+    scenario1 += user_contract.add_xp(user_address=mark.address,additional_xp = 100).run(source=game1.address)
+    scenario1 += user_contract.add_xp(user_address=mark.address,additional_xp = 100).run(source=elon.address,valid = False)
+
+    scenario1 += user_contract.incr_level(user_address=mark.address).run(source=game1.address)
+    scenario1 += user_contract.incr_level(user_address=mark.address).run(source=elon.address,valid = False)
+
+    scenario1 += user_contract.add_badge(user_address=mark.address,badge_id = sp.string("First Blood")).run(source=mark.address,valid = False)
+    scenario1 += user_contract.add_badge(user_address=mark.address,badge_id = sp.string("First Blood")).run(source=admin1.address)
+
+    scenario1 += user_contract.add_game_to_user(user_address=mark.address,game_address = game1.address).run(source=admin1.address)
+    scenario1 += user_contract.add_game_to_user(user_address=mark.address,game_address = game1.address).run(source=elon.address,valid = False)
