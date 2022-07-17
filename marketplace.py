@@ -16,10 +16,14 @@ class Error_message :
     2. Division of royalty between third party nfts and admin is also carried in the same way as described above
 '''
 class marketplace(sp.Contract):
-    def __init__(self,admin, _royalty):
+    def __init__(self,admin, _royalty, metadata):
         self.error = Error_message()
+        
+        self.init_type(sp.TRecord(
+            metadata=sp.TBigMap(sp.TString,sp.TBytes)
+        ))
         self.init(
-            # metadata = metadata,
+            metadata = metadata,
             listingId = sp.nat(0),
             auctionId = sp.nat(0),
             admin = admin,
