@@ -162,7 +162,7 @@ def test():
     setOperator(ft1, admin1, c, 0)
     c.createAuction(sp.record(
         token = ft1.address, tokenId = 0, amount = sp.nat(100000),
-        basePrice = sp.mutez(100), timePeriod = sp.int(86400)
+        basePrice = sp.mutez(100), timePeriod = sp.int(1000)
     )).run(sender = admin1)
 
     scenario.verify(ft1.data.ledger[ft1.ledger_key.make(c.address, 0)].balance == 100000)
@@ -174,6 +174,7 @@ def test():
     c.bid(sp.nat(3)).run(sender = user2, amount = sp.mutez(100000), valid = False)
 
     # it should not make bid if auction is expired
+    c.bid(sp.nat(1)).run(sender = user2, now = sp.timestamp(1500), amount = sp.mutez(200), valid = False)
 
     # it should not make bid if 1st bid is less than base price
     c.bid(sp.nat(0)).run(sender = user1, amount = sp.mutez(10), valid = False)
@@ -202,7 +203,33 @@ def test():
     scenario.verify(nft1.data.ledger[nft1.ledger_key.make(admin1.address, 0)].balance == 1)
 
 
+    setOperator(nft1, admin1, c, 0)
+    c.createAuction(sp.record(
+        token = nft1.address, tokenId = 0, amount = sp.nat(1),
+        basePrice = sp.mutez(100000), timePeriod = sp.int(86400)
+    )).run(sender = admin1)
+    c.bid(sp.nat(2)).run(sender = user1, amount = sp.mutez(1000000))
+
     #---------------- Withdraw ----------------
+
+    # should not withdrow if auction does not exist
+    c.withDraw(5).run(sender = admin1, valid = False)
+
+    # should not withdraw if auction not ended
+    c.withDraw(2).run(sender = admin1, valid = False)
+
+    # should not withdrow if unauth called
+    c.withDraw(1).run(sender = admin2, now = sp.timestamp(1000), valid = False)
+    c.withDraw(2).run(sender = admin2, now = sp.timestamp(100000), valid = False)
+
+    # should withdraw expired auction ie auctionId 1
+    c.withDraw(1).run(sender = admin1, now = sp.timestamp(1000))
+    scenario.verify(ft1.data.ledger[ft1.ledger_key.make(c.address, 0)].balance == 0)
+
+    # should withdraw auction and transfer respective assets to every one
+    c.withDraw(2).run(sender = admin1, now = sp.timestamp(100000))
+    scenario.verify(nft1.data.ledger[nft1.ledger_key.make(user1.address, 0)].balance == 1)
+
 
     
 

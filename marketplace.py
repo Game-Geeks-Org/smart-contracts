@@ -103,10 +103,7 @@ class marketplace(sp.Contract):
 
     def _auctionExists(self, _auctionId):
         sp.verify(self.data.auctions.contains(_auctionId), self.error.invalidAuction())
-
-    def _isAuctionActive(self, _auctionId):
-        sp.verify(self.data.auctions[_auctionId].timePeriod > sp.now, self.error.invalidAuction())
-
+    
     def _isBidValid(self, _auctionid):
         sp.if self.data.bids.contains(_auctionid):
             sp.verify(sp.amount > self.data.bids[_auctionid].value, self.error.invalidBid())
@@ -122,8 +119,22 @@ class marketplace(sp.Contract):
     def _ownerOnly(self, add1, add2):
         sp.verify(add1 == add2, self.error.ownerOnly())
 
+    def _transferRoyalty(self, toUs, toTP, tpAdmin):
+        sp.send(
+            tpAdmin, 
+            sp.utils.nat_to_mutez(toTP)
+        )
+        sp.send(
+            self.data.admin,
+            sp.utils.nat_to_mutez(toUs)
+        )
+
     @sp.private_lambda(with_storage = 'read-write')
-    def calculatePercentage(self, params):
+    def _isAuctionActive(self, _auctionId):
+        sp.result(self.data.auctions[_auctionId].timePeriod > sp.now)
+
+    @sp.private_lambda(with_storage = 'read-write')
+    def _calculatePercentage(self, params):
         sp.set_type(params,
             sp.TRecord(percentage = sp.TNat, amount = sp.TNat
         ))
@@ -189,9 +200,8 @@ class marketplace(sp.Contract):
     def bid(self, _auctionId):
         sp.set_type(_auctionId, sp.TNat)
         self._auctionExists(_auctionId)
-        self._isAuctionActive(_auctionId)
+        sp.verify(self._isAuctionActive(_auctionId), self.error.invalidAuction())
         self._isBidValid(_auctionId)
-
         self._updateBidder(_auctionId)
 
     @sp.entry_point
@@ -213,31 +223,33 @@ class marketplace(sp.Contract):
     def withDraw(self, _auctionId):
         sp.set_type(_auctionId, sp.TNat)
         self._auctionExists(_auctionId)
+        currAuction = sp.local('auction', self.data.auctions[_auctionId])
+        sp.verify(~(self._isAuctionActive(_auctionId)), self.error.invalidAuction())
+
         sp.if self.data.bids.contains(_auctionId):
             currBid = sp.local('bid',self.data.bids[_auctionId])
-            currAuction = sp.local('auction', self.data.auctions[_auctionId])
             sp.verify((sp.source == currBid.value.owner) | (sp.source == currAuction.value.seller),self.error.ownerOnly())
             
             del self.data.bids[_auctionId]
             del self.data.auctions[_auctionId]
 
-            royalty = sp.local('royalty', self.calculatePercentage(sp.record(percentage = self.data.royalty, amount = sp.utils.mutez_to_nat(currBid.value.value))))
+            royalty = sp.local('royalty', self._calculatePercentage(sp.record(percentage = self.data.royalty, amount = sp.utils.mutez_to_nat(currBid.value.value))))
             toTP = sp.local('toTP',0)
             toUs = sp.local('toUs',royalty.value)
             buyer = sp.local('buyer',currBid.value.owner)
             seller = sp.local('seller',currAuction.value.seller)
             toSeller = sp.utils.mutez_to_nat(currBid.value.value) - royalty.value
 
-            sp.if self.data.royaltyDivision.contains(self.data.auctions[_auctionId].token):
-                toTP.value = self.calculatePercentage(
+            sp.if self.data.royaltyDivision.contains(currAuction.value.token):
+                toTP.value = self._calculatePercentage(
                     sp.record(
-                        percentage = self.data.royaltyDivision[self.data.auctions[_auctionId].token].toThirdParty, 
+                        percentage = self.data.royaltyDivision[currAuction.value.token].toThirdParty, 
                         amount = royalty.value
                     )
                 )
-                toUs.value = self.calculatePercentage(
+                toUs.value = self._calculatePercentage(
                     sp.record(
-                        percentage = self.data.royaltyDivision[self.data.auctions[_auctionId].token].toAdmin, 
+                        percentage = self.data.royaltyDivision[currAuction.value.token].toAdmin, 
                         amount = royalty.value
                     )
                 )
@@ -250,13 +262,10 @@ class marketplace(sp.Contract):
                 buyer.value
             )
             
-            sp.send(
-                self.data.royaltyDivision[self.data.auctions[_auctionId].token].thirdPartyAdmin, 
-                sp.utils.nat_to_mutez(toTP.value)
-            )
-            sp.send(
-                self.data.admin,
-                sp.utils.nat_to_mutez(toUs.value)
+            self._transferRoyalty(
+                toUs.value, 
+                toTP.value,
+                self.data.royaltyDivision[currAuction.value.token].thirdPartyAdmin
             )
             sp.send(
                 seller.value,
@@ -264,7 +273,6 @@ class marketplace(sp.Contract):
             )
             
         sp.else :
-            currAuction = sp.local('auction', self.data.auctions[_auctionId])
             sp.verify(sp.source == currAuction.value.seller,self.error.ownerOnly())
             
             del self.data.auctions[_auctionId]
@@ -276,6 +284,6 @@ class marketplace(sp.Contract):
                 sp.self_address,
                 currAuction.value.seller
             )
-
+            
 
         
