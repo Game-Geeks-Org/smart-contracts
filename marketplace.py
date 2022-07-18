@@ -34,10 +34,12 @@ class marketplace(sp.Contract):
     def __init__(self,admin, _royalty):
         self.error = Error_message()
         
-        # #defining contract storages
-        # self.init_type(sp.TRecord(
-        #  metadata=sp.TBigMap(sp.TString,sp.TBytes)
-        #  ))
+        #defining contract storages
+
+        self.init_type(sp.TRecord(
+         metadata= sp.TBigMap(sp.TString,sp.TBytes),
+         fa2= sp.TAddress
+         ))
 
         #initialising contract storage
         self.init(
@@ -106,7 +108,10 @@ class marketplace(sp.Contract):
 
     def _auctionExists(self, _auctionId):
         sp.verify(self.data.auctions.contains(_auctionId), self.error.invalidAuction())
-    
+
+    def _isAuctionActive(self, _auctionId):
+        sp.verify(self.data.auctions[_auctionId].timePeriod > sp.now, self.error.invalidAuction())
+
     def _isBidValid(self, _auctionid):
         sp.if self.data.bids.contains(_auctionid):
             sp.verify(sp.amount > self.data.bids[_auctionid].value, self.error.invalidBid())
@@ -122,22 +127,8 @@ class marketplace(sp.Contract):
     def _ownerOnly(self, add1, add2):
         sp.verify(add1 == add2, self.error.ownerOnly())
 
-    def _transferRoyalty(self, toUs, toTP, tpAdmin):
-        sp.send(
-            tpAdmin, 
-            sp.utils.nat_to_mutez(toTP)
-        )
-        sp.send(
-            self.data.admin,
-            sp.utils.nat_to_mutez(toUs)
-        )
-
     @sp.private_lambda(with_storage = 'read-write')
-    def _isAuctionActive(self, _auctionId):
-        sp.result(self.data.auctions[_auctionId].timePeriod > sp.now)
-
-    @sp.private_lambda(with_storage = 'read-write')
-    def _calculatePercentage(self, params):
+    def calculatePercentage(self, params):
         sp.set_type(params,
             sp.TRecord(percentage = sp.TNat, amount = sp.TNat
         ))
@@ -203,8 +194,9 @@ class marketplace(sp.Contract):
     def bid(self, _auctionId):
         sp.set_type(_auctionId, sp.TNat)
         self._auctionExists(_auctionId)
-        sp.verify(self._isAuctionActive(_auctionId), self.error.invalidAuction())
+        self._isAuctionActive(_auctionId)
         self._isBidValid(_auctionId)
+
         self._updateBidder(_auctionId)
 
     @sp.entry_point
@@ -226,33 +218,31 @@ class marketplace(sp.Contract):
     def withDraw(self, _auctionId):
         sp.set_type(_auctionId, sp.TNat)
         self._auctionExists(_auctionId)
-        currAuction = sp.local('auction', self.data.auctions[_auctionId])
-        sp.verify(~(self._isAuctionActive(_auctionId)), self.error.invalidAuction())
-
         sp.if self.data.bids.contains(_auctionId):
             currBid = sp.local('bid',self.data.bids[_auctionId])
+            currAuction = sp.local('auction', self.data.auctions[_auctionId])
             sp.verify((sp.source == currBid.value.owner) | (sp.source == currAuction.value.seller),self.error.ownerOnly())
             
             del self.data.bids[_auctionId]
             del self.data.auctions[_auctionId]
 
-            royalty = sp.local('royalty', self._calculatePercentage(sp.record(percentage = self.data.royalty, amount = sp.utils.mutez_to_nat(currBid.value.value))))
+            royalty = sp.local('royalty', self.calculatePercentage(sp.record(percentage = self.data.royalty, amount = sp.utils.mutez_to_nat(currBid.value.value))))
             toTP = sp.local('toTP',0)
             toUs = sp.local('toUs',royalty.value)
             buyer = sp.local('buyer',currBid.value.owner)
             seller = sp.local('seller',currAuction.value.seller)
             toSeller = sp.utils.mutez_to_nat(currBid.value.value) - royalty.value
 
-            sp.if self.data.royaltyDivision.contains(currAuction.value.token):
-                toTP.value = self._calculatePercentage(
+            sp.if self.data.royaltyDivision.contains(self.data.auctions[_auctionId].token):
+                toTP.value = self.calculatePercentage(
                     sp.record(
-                        percentage = self.data.royaltyDivision[currAuction.value.token].toThirdParty, 
+                        percentage = self.data.royaltyDivision[self.data.auctions[_auctionId].token].toThirdParty, 
                         amount = royalty.value
                     )
                 )
-                toUs.value = self._calculatePercentage(
+                toUs.value = self.calculatePercentage(
                     sp.record(
-                        percentage = self.data.royaltyDivision[currAuction.value.token].toAdmin, 
+                        percentage = self.data.royaltyDivision[self.data.auctions[_auctionId].token].toAdmin, 
                         amount = royalty.value
                     )
                 )
@@ -265,10 +255,13 @@ class marketplace(sp.Contract):
                 buyer.value
             )
             
-            self._transferRoyalty(
-                toUs.value, 
-                toTP.value,
-                self.data.royaltyDivision[currAuction.value.token].thirdPartyAdmin
+            sp.send(
+                self.data.royaltyDivision[self.data.auctions[_auctionId].token].thirdPartyAdmin, 
+                sp.utils.nat_to_mutez(toTP.value)
+            )
+            sp.send(
+                self.data.admin,
+                sp.utils.nat_to_mutez(toUs.value)
             )
             sp.send(
                 seller.value,
@@ -276,6 +269,7 @@ class marketplace(sp.Contract):
             )
             
         sp.else :
+            currAuction = sp.local('auction', self.data.auctions[_auctionId])
             sp.verify(sp.source == currAuction.value.seller,self.error.ownerOnly())
             
             del self.data.auctions[_auctionId]
@@ -291,31 +285,87 @@ class marketplace(sp.Contract):
     @sp.entry_point
     def create_listing(self,params):
         sp.set_type(params, sp.TRecord(
-           fa2= sp.TAddress, token= sp.TAddress, tokenId= sp.TNat, amount= sp.TNat, price_per_unit= sp.TNat
-        ))
+           fa2= sp.TAddress, 
+           token= sp.TAddress, 
+           tokenId= sp.TNat, 
+           royalties= sp.TNat,
+           amount= sp.TNat, 
+           price_per_unit= sp.TNat
+           creator=sp.TAddress).layout(
+            ("fa2", ("tokenId", ("amount", ("price_per_unit", ("royalties", "creator")))))))
 
         #check atleast one edition is minted
         sp.verify(params.amount > 0)
 
-        self._transfertokens(
-            params.token,
-            params.tokenId,
-            params.amount,
-            sp.source,
-            sp.self_address
-            )
-        
-        self.data.listings[self.data.listingId] = sp.record(
-            token= params.token, tokenId= params.tokenId, amount= params.amount, price_per_unit= params.price_per_unit, seller=sp.source
+        sp.verify(params.royalties)
+
+        self.fa2_transfer(
+
+            fa2 = params.fa2,
+            from_ = sp.sender,
+            to_ = sp.self_address,
+            token_id = params.tokenId,
+            token_amount = params.amount
+
         )
 
+        self.data.listings[self.data.listingId] = sp.record(
+            token= params.token, 
+            tokenId= params.tokenId, 
+            amount= params.amount, 
+            price_per_unit= params.price_per_unit, 
+            royalties= params.royalties,
+            seller=sp.sender,
+            creator=params.creator
+        )
         self.data.listingId += 1
+
+    
+    @sp.entry_point
+    def collect(self, listing_id):
+
+        sp.set_type(listing_id, sp.TNat)
+        sp.verify(self.data.listings.contains(listing_id))
+
+        #check buyer is not same as seller
+        sale = sp.local("listings", self.data.listings[listing_id])
+        sp.verify(sp.sender != sale.value.issuer)
+
+        #check if xtz amount sent is equal to price defined while minting
+        sp.verify(sp.amount == sale.value.price_per_unit)
+
+        #check if atleast one edition is available to collect
+        sp.verify(sale.value.amount > 0)
+
+        with sp.if_(sale.value.price_per_unit != sp.tez(0)):
+
+            royalties_amount=sp.local("royalties_amount", sp.split_tokens(sale.value.price_per_token, sale.value.royalty, 1000))
+
+            with sp.if_(royalties_amount.value > sp.mutez(0)):
+                sp.send(sale.value.creator, royalties_amount.value)
+
+        #platform fees to be figured out
+
+        sp.send(sale.value.creator, sp.amount-royalties_amount.value)
+
+        self.fa2_transfer(
+            fa2=sale.value.fa2,
+            from_=sp.self_address,
+            to_=sp.sender,
+            token_id=sale.value.tokenId,
+            token_amount=1
+        )
+
+        self.data.sale[listing_id].amount = sp.as_nat(sale.value.amount - 1)
+
+
+
+
+
+
         
 
 
-
-
-        
 
 
         
