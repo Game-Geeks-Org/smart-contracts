@@ -34,11 +34,14 @@ class marketplace(sp.Contract):
     def __init__(self,admin, _royalty):
         self.error = Error_message()
         
+        # #defining contract storages
         # self.init_type(sp.TRecord(
-        #     metadata=sp.TBigMap(sp.TString,sp.TBytes)
-        # ))
+        #  metadata=sp.TBigMap(sp.TString,sp.TBytes)
+        #  ))
+
+        #initialising contract storage
         self.init(
-            # metadata = metadata,
+            metadata =sp.TBigMap(sp.TString, sp.Tbytes),
             listingId = sp.nat(0),
             auctionId = sp.nat(0),
             admin = admin,
@@ -284,6 +287,35 @@ class marketplace(sp.Contract):
                 sp.self_address,
                 currAuction.value.seller
             )
-            
+    
+    @sp.entry_point
+    def create_listing(self,params):
+        sp.set_type(params, sp.TRecord(
+           fa2= sp.TAddress, token= sp.TAddress, tokenId= sp.TNat, amount= sp.TNat, price_per_unit= sp.TNat
+        ))
+
+        #check atleast one edition is minted
+        sp.verify(params.amount > 0)
+
+        self._transfertokens(
+            params.token,
+            params.tokenId,
+            params.amount,
+            sp.source,
+            sp.self_address
+            )
+        
+        self.data.listings[self.data.listingId] = sp.record(
+            token= params.token, tokenId= params.tokenId, amount= params.amount, price_per_unit= params.price_per_unit, seller=sp.source
+        )
+
+        self.data.listingId += 1
+        
+
+
+
+
+        
+
 
         
