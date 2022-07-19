@@ -299,14 +299,12 @@ class marketplace(sp.Contract):
 
         sp.verify(params.royalties)
 
-        self.fa2_transfer(
-
-            fa2 = params.fa2,
-            from_ = sp.sender,
-            to_ = sp.self_address,
-            tokenId = params.tokenId,
-            token_amount = params.amount
-
+        self._transferTokens(
+            params.token,
+            params.tokenId,
+            params.amount,
+            sp.source,
+            sp.self_address
         )
 
         self.data.listings[self.data.listingId] = sp.record(
@@ -322,13 +320,13 @@ class marketplace(sp.Contract):
 
     
     @sp.entry_point
-    def collect(self, listing_id):
+    def collect(self, _listingId):
 
-        sp.set_type(listing_id, sp.TNat)
-        sp.verify(self.data.listings.contains(listing_id))
+        sp.set_type(_listingId, sp.TNat)
+        sp.verify(self.data.listings.contains(_listingId))
 
         #check buyer is not same as seller
-        sale = sp.local("listings", self.data.listings[listing_id])
+        sale = sp.local("listings", self.data.listings[_listingId])
         sp.verify(sp.sender != sale.value.issuer)
 
         #check if xtz amount sent is equal to price defined while minting
@@ -346,39 +344,40 @@ class marketplace(sp.Contract):
 
         #platform fees to be figured out
 
-        sp.send(sale.value.creator, sp.amount-royalties_amount.value)
-
-        self.fa2_transfer(
-            fa2=sale.value.fa2,
-            from_=sp.self_address,
-            to_=sp.sender,
-            token_id=sale.value.tokenId,
-            token_amount=1
+        self._transferTokens(
+            token= sale.value.fa2,
+            tokenId= sale.value.tokenId,
+            amount=1,
+            from_ = sp.self_address,
+            to_ = sp.sender
         )
 
-        self.data.sale[listing_id].amount = sp.as_nat(sale.value.amount - 1)
+        sp.send(sale.value.creator, sp.amount-royalties_amount.value)
+
+
+
+
+
+
+        self.data.sale[_listingId].amount = sp.as_nat(sale.value.amount - 1)
 
     
     @sp.entry_point
-    def cancel_swap(self, listing_id):
+    def cancel_swap(self, _listingId):
 
-        sp.set_type(listing_id, sp.TNat)
-        sp.verify(self.data.sale.contains(listing_id))
+        sp.set_type(_listingId, sp.TNat)
+        sp.verify(self.data.sale.contains(_listingId))
 
-        sale = sp.local("listings", self.data.sale[listing_id])
+        sale = sp.local("listings", self.data.sale[_listingId])
         sp.verify(sp.sender == sale.value.creator)
 
         sp.verify(sale.value.amount > 0)
 
-        self.fa2_transfer(
-            fa2= sale.value.fa2,
-            from_ = sp.self_address,
-            to_ = sp.sender,
-            tokenId= sale.value.token_id,
-            token_amount= sale.value.amount
-        )
 
-        del self.data.sale[listing_id]
+
+
+
+        del self.data.sale[_listingId]
 
         
 
