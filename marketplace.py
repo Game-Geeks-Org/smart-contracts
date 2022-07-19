@@ -177,7 +177,7 @@ class marketplace(sp.Contract):
 
         self._transferTokens(
             params.token, 
-            params.tokenId, 
+            params.token_Id, 
             params.amount, 
             sp.source,
             sp.self_address
@@ -304,7 +304,7 @@ class marketplace(sp.Contract):
             fa2 = params.fa2,
             from_ = sp.sender,
             to_ = sp.self_address,
-            token_id = params.tokenId,
+            tokenId = params.tokenId,
             token_amount = params.amount
 
         )
@@ -357,6 +357,31 @@ class marketplace(sp.Contract):
         )
 
         self.data.sale[listing_id].amount = sp.as_nat(sale.value.amount - 1)
+
+    
+    @sp.entry_point
+    def cancel_swap(self, listing_id):
+
+        sp.set_type(listing_id, sp.TNat)
+        sp.verify(self.data.sale.contains(listing_id))
+
+        sale = sp.local("listings", self.data.sale[listing_id])
+        sp.verify(sp.sender == sale.value.creator)
+
+        sp.verify(sale.value.amount > 0)
+
+        self.fa2_transfer(
+            fa2= sale.value.fa2,
+            from_ = sp.self_address,
+            to_ = sp.sender,
+            tokenId= sale.value.token_id,
+            token_amount= sale.value.amount
+        )
+
+        del self.data.sale[listing_id]
+
+        
+
 
 
 
