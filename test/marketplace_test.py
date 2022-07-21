@@ -148,8 +148,15 @@ def test():
         basePrice = sp.mutez(100000), timePeriod = sp.int(86400)
     )).run(sender = user1, valid = False)
 
-    # it should create new auction with NFT, and transfer token to the vault
+    # it should not create new auction if token is whitelisted
     setOperator(nft1, admin1, c, 0)
+    c.createAuction(sp.record(
+        token = nft1.address, tokenId = 0, amount = sp.nat(1),
+        basePrice = sp.mutez(100000), timePeriod = sp.int(86400)
+    )).run(sender = admin1, valid = False)
+
+    # it should create new auction with NFT, and transfer token to the vault
+    c.whitelist(nft1.address).run(sender = admin2)
     c.createAuction(sp.record(
         token = nft1.address, tokenId = 0, amount = sp.nat(1),
         basePrice = sp.mutez(100000), timePeriod = sp.int(86400)
@@ -159,6 +166,7 @@ def test():
     scenario.verify(nft1.data.ledger[nft1.ledger_key.make(admin1.address, 0)].balance == 0)
 
     # it should create new auction with FT, and transfer token to the vault
+    c.whitelist(ft1.address).run(sender = admin2)
     setOperator(ft1, admin1, c, 0)
     c.createAuction(sp.record(
         token = ft1.address, tokenId = 0, amount = sp.nat(100000),
@@ -178,6 +186,9 @@ def test():
 
     # it should not make bid if 1st bid is less than base price
     c.bid(sp.nat(0)).run(sender = user1, amount = sp.mutez(10), valid = False)
+
+    # it should not make bid if seller trying to bid
+    c.bid(sp.nat(0)).run(sender = admin1, amount = sp.mutez(100000), valid = False)
 
     # it should make the first bid
     c.bid(sp.nat(0)).run(sender = user1, amount = sp.mutez(100000))
@@ -218,7 +229,7 @@ def test():
     # should not withdraw if auction not ended
     c.withDraw(2).run(sender = admin1, valid = False)
 
-    # should not withdrow if unauth called
+    # # should not withdrow if unauth called
     c.withDraw(1).run(sender = admin2, now = sp.timestamp(1000), valid = False)
     c.withDraw(2).run(sender = admin2, now = sp.timestamp(100000), valid = False)
 
@@ -226,7 +237,7 @@ def test():
     c.withDraw(1).run(sender = admin1, now = sp.timestamp(1000))
     scenario.verify(ft1.data.ledger[ft1.ledger_key.make(c.address, 0)].balance == 0)
 
-    # should withdraw auction and transfer respective assets to every one
+    # # should withdraw auction and transfer respective assets to every one
     c.withDraw(2).run(sender = admin1, now = sp.timestamp(100000))
     scenario.verify(nft1.data.ledger[nft1.ledger_key.make(user1.address, 0)].balance == 1)
 
