@@ -38,7 +38,7 @@ class marketplace(sp.Contract):
 
         self.init_type(sp.TRecord(
          metadata= sp.TBigMap(sp.TString,sp.TBytes),
-         fa2= sp.TAddress
+        
          ))
 
         #initialising contract storage
@@ -285,14 +285,11 @@ class marketplace(sp.Contract):
     @sp.entry_point
     def create_listing(self,params):
         sp.set_type(params, sp.TRecord(
-           fa2= sp.TAddress, 
            token= sp.TAddress, 
            tokenId= sp.TNat, 
            royalties= sp.TNat,
            amount= sp.TNat, 
-           price_per_unit= sp.TNat
-           creator=sp.TAddress).layout(
-            ("fa2", ("tokenId", ("amount", ("price_per_unit", ("royalties", "creator")))))))
+           price_per_unit= sp.TNat))
 
         #check atleast one edition is minted
         sp.verify(params.amount > 0)
@@ -314,7 +311,6 @@ class marketplace(sp.Contract):
             price_per_unit= params.price_per_unit, 
             royalties= params.royalties,
             seller=sp.sender,
-            creator=params.creator
         )
         self.data.listingId += 1
 
@@ -345,19 +341,14 @@ class marketplace(sp.Contract):
         #platform fees to be figured out
 
         self._transferTokens(
-            token= sale.value.fa2,
-            tokenId= sale.value.tokenId,
-            amount=1,
-            from_ = sp.self_address,
-            to_ = sp.sender
+            sale.value.token,
+            sale.value.tokenId,
+            sale.value.amount,
+            sp.self_address,
+            sp.sender
         )
 
         sp.send(sale.value.creator, sp.amount-royalties_amount.value)
-
-
-
-
-
 
         self.data.sale[_listingId].amount = sp.as_nat(sale.value.amount - 1)
 
