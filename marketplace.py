@@ -56,7 +56,7 @@ class marketplace(sp.Contract):
             )),
             listings= sp.map(tkey = sp.TNat, tvalue = sp.TRecord(
                 token = sp.TAddress, tokenId = sp.TNat, amount = sp.TNat,
-                seller = sp.TAddress, price_per_unit = sp.TMutez
+                seller = sp.TAddress, price = sp.TMutez
             )),
             auctions = sp.map(tkey = sp.TNat, tvalue = sp.TRecord(
                 token = sp.TAddress, tokenId = sp.TNat, amount = sp.TNat,
@@ -122,6 +122,9 @@ class marketplace(sp.Contract):
 
     def _auctionExists(self, _auctionId):
         sp.verify(self.data.auctions.contains(_auctionId), self.error.invalidAuction())
+
+    def _listingExists(self, _listingId):
+        sp.verify(self.data.listings.contains(_listingId))
     
     def _isBidValid(self, _auctionid):
         sp.verify(~(sp.sender == self.data.auctions[_auctionid].seller),self.error.invalidBid())
@@ -312,9 +315,8 @@ class marketplace(sp.Contract):
         sp.set_type(params, sp.TRecord(
            token= sp.TAddress, 
            tokenId= sp.TNat, 
-           
            amount= sp.TNat, 
-           price_per_unit= sp.TNat))
+           price= sp.TNat))
 
         #check atleast one edition is minted
         sp.verify(params.amount > 0)
@@ -339,7 +341,7 @@ class marketplace(sp.Contract):
             token= params.token, 
             tokenId= params.tokenId, 
             amount= params.amount, 
-            price_per_unit= params.price_per_unit, 
+            price= params.price, 
             seller=sp.sender,
         )
         self.data.listingId += 1
@@ -349,59 +351,82 @@ class marketplace(sp.Contract):
     def collect(self, _listingId):
 
         sp.set_type(_listingId, sp.TNat)
-        sp.verify(self.data.listings.contains(_listingId))
+        self._listingExists(_listingId)
 
-        #check buyer is not same as seller
-        sale = sp.local("listings", self.data.listings[_listingId])
-        sp.verify(sp.sender != sale.value.issuer)
+        currListing = sp.local('listing', self.data.listings[_listingId])
 
-        #check if xtz amount sent is equal to price defined while minting
-        sp.verify(sp.amount == sale.value.price_per_unit)
+        sp.if self.data.listings.contains(_listingId):
+            currSale= sp.local('sale', self.data.listings[_listingId])
+            sp.verify((sp.source == currSale.value.owner) | (sp.source == currListing.value.seller))
 
-        #check if atleast one edition is available to collect
-        #sp.verify(sale.value.amount > 0)
+            del self.data.listings[_listingId]
 
-        # calculate and send royalty : reffer withdraw func. above
+            royalty = sp.local('royalty', self.calculatePercentage(sp.record(percentage = self.data.royalty, amount = sp.utils.mutez_to_nat(currSale.value.value))))
+            toTP = sp.local('toTP', 0)
+            toUs = sp.local('toUs', royalty.value)
+            buyer = sp.local('buyer', currSale.value.owner)
+            seller = sp.local('seller', currListing.value.seller)
+            toSeller = sp.utils.mutez_to_nat(currSale.value.value) - royalty.value
 
-        #price per token to be changed to price
-        
-#         with sp.if_(sale.value.price_per_unit != sp.tez(0)):
+            sp.if self.data.royaltyDivision.contains(currListing.value.token):
+                toTP.value = self.calculatePercentage(
+                    sp.record(
+                        percentage = self.data.royaltyDivision[currListing.value.token].toThirdParty,
+                        amount = royalty.value
+                    )
+                )
+                toUs.value = self.calculatePercentage(
+                    sp.record(
+                        percentage = self.data.royaltyDivision[currListing.value.token].toAdmin,
+                        amount = royalty.value
+                    )
+                )
 
-#             royalties_amount=sp.local("royalties_amount", sp.split_tokens(sale.value.price_per_token, sale.value.royalty, 1000))
+                self._transferTokens(
+                    currListing.value.token,
+                    currListing.value.tokenId,
+                    currListing.value.amount,
+                    sp.self_address,
+                    buyer.value
+                )
+                self._transferRoyalty(
+                    toUs.value,
+                    toTP.value,
+                    self.data.royaltyDivision[currListing.value.token].thirdPartyAdmin
+                )
+                sp.send(
+                    seller.value,
+                    sp.utils.nat_to_mutez(sp.as_nat(toSeller))
+                )
+            
+            sp.else:
+                sp.verify(sp.source == currListing.value.seller)
 
-#             with sp.if_(royalties_amount.value > sp.mutez(0)):
-#                 sp.send(sale.value.creator, royalties_amount.value)
+                del self.data.listings[_listingId]
 
-
-        self._transferTokens(
-            sale.value.token,
-            sale.value.tokenId,
-            sale.value.amount,
-            sp.self_address,
-            sp.sender
-        )
-
-        sp.send(sale.value.creator, sp.amount-royalties_amount.value)
-
-        self.data.sale[_listingId].amount = sp.as_nat(sale.value.amount - 1)
+                self._transferTokens(
+                    currListing.value.token,
+                    currListing.value.tokenId,
+                    currListing.value.amount,
+                    sp.self_address,
+                    currListing.value.seller
+                )
 
     
     @sp.entry_point
-    def cancel_swap(self, _listingId):
-
+    def cancelSale(self, _listingId):
         sp.set_type(_listingId, sp.TNat)
-        sp.verify(self.data.sale.contains(_listingId))
-
-        sale = sp.local("listings", self.data.sale[_listingId])
-        # change from creator and issuer to seller
-        sp.verify(sp.sender == sale.value.creator)
-
-        # no need for this here
-        sp.verify(sale.value.amount > 0)
-
-        # return locked tokesn : reffer cancel auction
-
-        del self.data.sale[_listingId]
+        self._listingExists(_listingId)
+        self._ownerOnly(self.data.listings[_listingId].seller, sp.source)
+        self._transferTokens(
+            self.data.listings[_listingId].token,
+            self.data.listings[_listingId].tokenId,
+            self.data.listings[_listingId].amount,
+            sp.self_address,
+            sp.source
+        )
+        
+        del self.data.listings[_listingId]
 
         
 
