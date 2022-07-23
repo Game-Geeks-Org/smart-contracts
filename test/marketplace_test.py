@@ -242,6 +242,50 @@ def test():
     scenario.verify(nft1.data.ledger[nft1.ledger_key.make(user1.address, 0)].balance == 1)
 
 
+    #----------------Create Listing-------------
+
+    #It should not create a listing if price is 0
+    c.createListing(sp.record(
+        token = nft1.address, tokenId = 0, amount = sp.nat(1), price = sp.mutez(0)
+    )).run(sender = admin1, valid = False)
+
+    #It should not create a listing if amount is 0
+    c.createListing(sp.record(
+        token = nft1.address, tokenId = 0, amount = sp.nat(0), price = sp.mutez(10000)
+    )).run(sender = admin1, valid = False)
+
+    #It should not create a listing if not called by the token owner
+    c.createListing(sp.record(
+        token = nft1.address, tokenId = 0, amount = sp.nat(1), price = sp.mutez(100000)
+    )).run(sender = user1, valid = False)
+
+    #It should create a listing with a NFT and transfer it to the vault
+
+    c.whitelist(nft1.address).run(sender = admin2)
+    c.createListing(sp.record(
+        token= nft1.address, token=0, amount = sp.nat(1), price = sp.mutez(100000)
+    )).run(sender = admin1)
+
+    scenario.verify(nft1.data.ledger[nft1.ledger_key.make(c.address, 0)].balance == 1)
+    scenario.verify(nft1.data.ledger[nft1.ledger_key.make(admin1.address, 0)].balance == 0)
+
+    #It should create a listing with a FT and transfer it to the vault
+
+    c.whitelist(ft1.address).run(sender = admin2)
+    setOperator(ft1, admin1, c, 0)
+    c.createListing(sp.record(
+        token = ft1.address, tokenId = 0, amount = sp.nat(100000), price = sp.mutez(100)
+    )).run(sender = admin1)
+
+    scenario.verify(ft1.data.ledger[ft1.ledger_key.make(c.address, 0)].balance == 100000)
+
+
+    #-----------------Buy----------------
+
+    
+
+
+
     
 
 

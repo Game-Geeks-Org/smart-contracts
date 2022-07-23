@@ -311,7 +311,7 @@ class marketplace(sp.Contract):
             )
     
     @sp.entry_point
-    def create_listing(self,params):
+    def createlisting(self,params):
         sp.set_type(params, sp.TRecord(
            token= sp.TAddress, 
            tokenId= sp.TNat, 
@@ -321,8 +321,7 @@ class marketplace(sp.Contract):
         #check atleast one edition is minted
         sp.verify(params.amount > 0)
         
-        # rename price_per_unti to price
-        # check whitelisting : reffer create auction func
+        self._isWhitelisted(params.token)
 
         #Check if the base price is not 0 
         sp.verify(params.price_per_unit > 0)
