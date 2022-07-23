@@ -312,7 +312,7 @@ class marketplace(sp.Contract):
         sp.set_type(params, sp.TRecord(
            token= sp.TAddress, 
            tokenId= sp.TNat, 
-           royalties= sp.TNat,
+           
            amount= sp.TNat, 
            price_per_unit= sp.TNat))
 
@@ -322,7 +322,7 @@ class marketplace(sp.Contract):
         #Check if the base price is not 0 
         sp.verify(params.price_per_unit > 0)
 
-        sp.verify(params.royalties)
+        #whitelisting
 
         self._transferTokens(
             params.token,
@@ -337,7 +337,7 @@ class marketplace(sp.Contract):
             tokenId= params.tokenId, 
             amount= params.amount, 
             price_per_unit= params.price_per_unit, 
-            royalties= params.royalties,
+            
             seller=sp.sender,
         )
         self.data.listingId += 1
@@ -357,16 +357,17 @@ class marketplace(sp.Contract):
         sp.verify(sp.amount == sale.value.price_per_unit)
 
         #check if atleast one edition is available to collect
-        sp.verify(sale.value.amount > 0)
+        #sp.verify(sale.value.amount > 0)
 
-        with sp.if_(sale.value.price_per_unit != sp.tez(0)):
+        #price per token to be changed to price
+        
+#         with sp.if_(sale.value.price_per_unit != sp.tez(0)):
 
-            royalties_amount=sp.local("royalties_amount", sp.split_tokens(sale.value.price_per_token, sale.value.royalty, 1000))
+#             royalties_amount=sp.local("royalties_amount", sp.split_tokens(sale.value.price_per_token, sale.value.royalty, 1000))
 
-            with sp.if_(royalties_amount.value > sp.mutez(0)):
-                sp.send(sale.value.creator, royalties_amount.value)
+#             with sp.if_(royalties_amount.value > sp.mutez(0)):
+#                 sp.send(sale.value.creator, royalties_amount.value)
 
-        #platform fees to be figured out
 
         self._transferTokens(
             sale.value.token,
