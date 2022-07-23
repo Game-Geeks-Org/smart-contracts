@@ -318,6 +318,9 @@ class marketplace(sp.Contract):
 
         #check atleast one edition is minted
         sp.verify(params.amount > 0)
+        
+        #Check if the base price is not 0 
+        sp.verify(params.price_per_unit > 0)
 
         sp.verify(params.royalties)
 
