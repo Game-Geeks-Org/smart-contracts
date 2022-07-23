@@ -319,6 +319,9 @@ class marketplace(sp.Contract):
         #check atleast one edition is minted
         sp.verify(params.amount > 0)
         
+        # rename price_per_unti to price
+        # check whitelisting : reffer create auction func
+
         #Check if the base price is not 0 
         sp.verify(params.price_per_unit > 0)
 
@@ -337,7 +340,6 @@ class marketplace(sp.Contract):
             tokenId= params.tokenId, 
             amount= params.amount, 
             price_per_unit= params.price_per_unit, 
-            
             seller=sp.sender,
         )
         self.data.listingId += 1
@@ -358,6 +360,8 @@ class marketplace(sp.Contract):
 
         #check if atleast one edition is available to collect
         #sp.verify(sale.value.amount > 0)
+
+        # calculate and send royalty : reffer withdraw func. above
 
         #price per token to be changed to price
         
@@ -389,13 +393,13 @@ class marketplace(sp.Contract):
         sp.verify(self.data.sale.contains(_listingId))
 
         sale = sp.local("listings", self.data.sale[_listingId])
+        # change from creator and issuer to seller
         sp.verify(sp.sender == sale.value.creator)
 
+        # no need for this here
         sp.verify(sale.value.amount > 0)
 
-
-
-
+        # return locked tokesn : reffer cancel auction
 
         del self.data.sale[_listingId]
 
