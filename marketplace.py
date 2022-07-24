@@ -397,17 +397,17 @@ class marketplace(sp.Contract):
         )
         
     
-    # @sp.entry_point
-    # def cancelSale(self, _listingId):
-    #     sp.set_type(_listingId, sp.TNat)
-    #     self._listingExists(_listingId)
-    #     self._ownerOnly(self.data.listings[_listingId].seller, sp.source)
-    #     self._transferTokens(
-    #         self.data.listings[_listingId].token,
-    #         self.data.listings[_listingId].tokenId,
-    #         self.data.listings[_listingId].amount,
-    #         sp.self_address,
-    #         sp.source
-    #     )
+    @sp.entry_point
+    def cancelSale(self, _listingId):
+        sp.set_type(_listingId, sp.TNat)
+        self._listingExists(_listingId)
+        self._ownerOnly(self.data.listings[_listingId].seller, sp.source)
+        self._transferTokens(
+            self.data.listings[_listingId].token,
+            self.data.listings[_listingId].tokenId,
+            self.data.listings[_listingId].amount,
+            sp.self_address,
+            sp.source
+        )
         
-    #     del self.data.listings[_listingId]
+        del self.data.listings[_listingId]

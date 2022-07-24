@@ -313,8 +313,11 @@ def test():
     # -------------- Cancel listing --------------
 
     # it should not cancel listing if it does not exist
+    c.cancelSale(sp.nat(10)).run(sender = admin1, valid = False)
 
     # it should not cancel listing if not  called by the item owner
+    c.cancelSale(sp.nat(2)).run(sender = admin2, valid = False)
 
     # it should cancel listing, return the assets and delete this entry from the map 
-
+    c.cancelSale(sp.nat(2)).run(sender = user1, valid = True)
+    scenario.verify(nft1.data.ledger[nft1.ledger_key.make(user1.address, 1)].balance == 1)
