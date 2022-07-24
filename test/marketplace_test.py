@@ -2,6 +2,7 @@ import smartpy as sp
 
 Marketplace = sp.io.import_stored_contract("marketplace")
 fa2 = sp.io.import_stored_contract("fa2")
+Mockup = sp.io.import_stored_contract("mockup")
 
 def mintNFT(nft, id, to, admin):
     tok0_md = fa2.FA2.make_metadata(
@@ -71,7 +72,10 @@ def test():
             admin = admin1.address
         )
 
-    c = Marketplace.marketplace(admin = admin1.address,_royalty =  sp.nat(1))
+    mockup = Mockup.mockup()
+    scenario += mockup
+
+    c = Marketplace.marketplace(admin = admin1.address,_royalty =  sp.nat(1), _geekyHeadNFTs = mockup.address)
     scenario += c
     scenario += nft1
     scenario += nft2
@@ -85,7 +89,6 @@ def test():
 
     # it should update admin
     c.setAdmin(admin2.address).run(sender = admin1)
-
 
     # --------------- Set Royalty -------------- #
 
@@ -175,7 +178,6 @@ def test():
 
     scenario.verify(ft1.data.ledger[ft1.ledger_key.make(c.address, 0)].balance == 100000)
 
-
     # ----------------- New Bid --------------
 
     # it should not make bid if auction does not exist
@@ -199,7 +201,6 @@ def test():
     # it should make a bid, refund the previoud bidder and update the bid details
     c.bid(sp.nat(0)).run(sender = user2, amount = sp.mutez(1000000))    
 
-
     # --------------- Cancel Auction -----------
 
     # it should not cancel auction if it does not exist
@@ -212,7 +213,6 @@ def test():
     c.cancelAuction(0).run(sender = admin1)
     scenario.verify(nft1.data.ledger[nft1.ledger_key.make(c.address, 0)].balance == 0)
     scenario.verify(nft1.data.ledger[nft1.ledger_key.make(admin1.address, 0)].balance == 1)
-
 
     setOperator(nft1, admin1, c, 0)
     c.createAuction(sp.record(
@@ -241,51 +241,42 @@ def test():
     c.withDraw(2).run(sender = admin1, now = sp.timestamp(100000))
     scenario.verify(nft1.data.ledger[nft1.ledger_key.make(user1.address, 0)].balance == 1)
 
-
     #----------------Create Listing-------------
 
+    mintNFT(nft1, 1, admin1.address, admin1)
+    mintFT(ft1, 1 , admin1.address, admin1, 1000000)
     #It should not create a listing if price is 0
     c.createListing(sp.record(
-        token = nft1.address, tokenId = 0, amount = sp.nat(1), price = sp.mutez(0)
+        token = nft1.address, tokenId = 1, amount = sp.nat(1), price = sp.mutez(0)
     )).run(sender = admin1, valid = False)
 
     #It should not create a listing if amount is 0
     c.createListing(sp.record(
-        token = nft1.address, tokenId = 0, amount = sp.nat(0), price = sp.mutez(10000)
+        token = nft1.address, tokenId = 1, amount = sp.nat(0), price = sp.mutez(10000)
     )).run(sender = admin1, valid = False)
 
     #It should not create a listing if not called by the token owner
     c.createListing(sp.record(
-        token = nft1.address, tokenId = 0, amount = sp.nat(1), price = sp.mutez(100000)
+        token = nft1.address, tokenId = 1, amount = sp.nat(1), price = sp.mutez(100000)
     )).run(sender = user1, valid = False)
 
     #It should create a listing with a NFT and transfer it to the vault
 
-    c.whitelist(nft1.address).run(sender = admin2)
+    setOperator(nft1, admin1, c, 1)
     c.createListing(sp.record(
-        token= nft1.address, token=0, amount = sp.nat(1), price = sp.mutez(100000)
+        token= nft1.address, tokenId=1, amount = sp.nat(1), price = sp.mutez(100000)
     )).run(sender = admin1)
-
-    scenario.verify(nft1.data.ledger[nft1.ledger_key.make(c.address, 0)].balance == 1)
-    scenario.verify(nft1.data.ledger[nft1.ledger_key.make(admin1.address, 0)].balance == 0)
+    scenario.verify(nft1.data.ledger[nft1.ledger_key.make(c.address, 1)].balance == 1)
+    scenario.verify(nft1.data.ledger[nft1.ledger_key.make(admin1.address, 1)].balance == 0)
 
     #It should create a listing with a FT and transfer it to the vault
 
     c.whitelist(ft1.address).run(sender = admin2)
-    setOperator(ft1, admin1, c, 0)
+    setOperator(ft1, admin1, c, 1)
     c.createListing(sp.record(
-        token = ft1.address, tokenId = 0, amount = sp.nat(100000), price = sp.mutez(100)
+        token = ft1.address, tokenId = 1, amount = sp.nat(100000), price = sp.mutez(100)
     )).run(sender = admin1)
 
-    scenario.verify(ft1.data.ledger[ft1.ledger_key.make(c.address, 0)].balance == 100000)
-
+    scenario.verify(ft1.data.ledger[ft1.ledger_key.make(c.address, 1)].balance == 100000)
 
     #-----------------Buy----------------
-
-    
-
-
-
-    
-
-

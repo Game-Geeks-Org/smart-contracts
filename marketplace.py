@@ -34,23 +34,17 @@ class Error_message :
     2. Division of royalty between third party nfts and admin is also carried in the same way as described above
 '''
 class marketplace(sp.Contract):
-    def __init__(self,admin, _royalty):
+    def __init__(self,admin, _royalty, _geekyHeadNFTs):
         self.error = Error_message()
-        
-        #defining contract storages
-
-        self.init_type(sp.TRecord(
-         metadata= sp.TBigMap(sp.TString,sp.TBytes),
-        
-         ))
 
         #initialising contract storage
         self.init(
-            metadata =sp.TBigMap(sp.TString, sp.TBytes),
+        #    metadata =sp.big_map(sp.TString, sp.TBytes),
             listingId = sp.nat(0),
             auctionId = sp.nat(0),
             admin = admin,
             royalty = _royalty,
+            geekyHead = _geekyHeadNFTs,
             royaltyDivision = sp.big_map(tkey = sp.TAddress, tvalue = sp.TRecord(
                 toAdmin = sp.TNat, toThirdParty = sp.TNat, thirdPartyAdmin = sp.TAddress
             )),
@@ -111,12 +105,10 @@ class marketplace(sp.Contract):
     def _refundBid(self, _auctionId):
         amount = sp.local('amount',sp.map({},tkey = sp.TNat, tvalue = sp.TMutez))
         to = sp.local('to', sp.map({},tkey = sp.TNat, tvalue = sp.TAddress))
-
         sp.if self.data.bids.contains(_auctionId):
             amount.value[0] = self.data.bids[_auctionId].value
             to.value[0] = self.data.bids[_auctionId].owner
             del self.data.bids[_auctionId]
-
         sp.if amount.value.contains(0):
             sp.send(to.value[0], amount.value[0])
 
@@ -163,14 +155,12 @@ class marketplace(sp.Contract):
         self._onlyAdmin()
         sp.set_type(params, sp.TAddress)
         self.data.admin = params
-
     @sp.entry_point
     def setRoyalty(self, params):
         self._onlyAdmin()
         sp.set_type(params, sp.TNat)
         self._checkValidRoyalty(params)
         self.data.royalty = params
-
     @sp.entry_point
     def setRoyaltyDivision(self, params):
         self._onlyAdmin()
@@ -186,13 +176,11 @@ class marketplace(sp.Contract):
             toThirdParty = params.toThirdParty,
             thirdPartyAdmin = params.thirdPartyAdmin
         )
-
     @sp.entry_point
     def whitelist(self, _token):
         self._onlyAdmin()
         sp.set_type(_token , sp.TAddress)
         self.data.whitelist[_token] = True
-
     @sp.entry_point
     def createAuction(self, params):
         sp.set_type(params,sp.TRecord(
@@ -200,10 +188,8 @@ class marketplace(sp.Contract):
             basePrice = sp.TMutez, timePeriod = sp.TInt
         ))
         self._isWhitelisted(params.token)
-
         sp.verify(sp.utils.mutez_to_nat(params.basePrice) > sp.nat(0),self.error.invalidPrice())
         sp.verify(params.timePeriod > sp.int(0), self.error.invalidTimePeriod())
-
         self._transferTokens(
             params.token, 
             params.tokenId, 
@@ -211,12 +197,10 @@ class marketplace(sp.Contract):
             sp.source,
             sp.self_address
         )
-
         self.data.auctions[self.data.auctionId] = sp.record(
             token = params.token, tokenId = params.tokenId, amount = params.amount,
             basePrice = params.basePrice, seller = sp.source, timePeriod = sp.now.add_seconds(params.timePeriod)
         )
-        
         self.data.auctionId += 1
 
     @sp.entry_point
@@ -225,9 +209,7 @@ class marketplace(sp.Contract):
         self._auctionExists(_auctionId)
         sp.verify(self._isAuctionActive(_auctionId), self.error.invalidAuction())
         self._isBidValid(_auctionId)
-
         self._updateBidder(_auctionId)
-
     @sp.entry_point
     def cancelAuction(self, _auctionId):
         sp.set_type(_auctionId, sp.TNat)
@@ -249,21 +231,17 @@ class marketplace(sp.Contract):
         self._auctionExists(_auctionId)
         sp.verify(~(self._isAuctionActive(_auctionId)), self.error.invalidAuction())
         currAuction = sp.local('auction', self.data.auctions[_auctionId])
-
         sp.if self.data.bids.contains(_auctionId):
             currBid = sp.local('bid',self.data.bids[_auctionId])
             sp.verify((sp.source == currBid.value.owner) | (sp.source == currAuction.value.seller),self.error.ownerOnly())
-            
             del self.data.bids[_auctionId]
             del self.data.auctions[_auctionId]
-
             royalty = sp.local('royalty', self.calculatePercentage(sp.record(percentage = self.data.royalty, amount = sp.utils.mutez_to_nat(currBid.value.value))))
             toTP = sp.local('toTP',0)
             toUs = sp.local('toUs',royalty.value)
             buyer = sp.local('buyer',currBid.value.owner)
             seller = sp.local('seller',currAuction.value.seller)
             toSeller = sp.utils.mutez_to_nat(currBid.value.value) - royalty.value
-
             sp.if self.data.royaltyDivision.contains(currAuction.value.token):
                 toTP.value = self.calculatePercentage(
                     sp.record(
@@ -277,7 +255,6 @@ class marketplace(sp.Contract):
                         amount = royalty.value
                     )
                 )
-
             self._transferTokens(
                 currAuction.value.token, 
                 currAuction.value.tokenId,
@@ -291,7 +268,6 @@ class marketplace(sp.Contract):
                 toTP.value,
                 self.data.royaltyDivision[currAuction.value.token].thirdPartyAdmin
             )
-
             sp.send(
                 seller.value,
                 sp.utils.nat_to_mutez(sp.as_nat(toSeller))
@@ -301,7 +277,6 @@ class marketplace(sp.Contract):
             sp.verify(sp.source == currAuction.value.seller,self.error.ownerOnly())
             
             del self.data.auctions[_auctionId]
-
             self._transferTokens(
                 currAuction.value.token, 
                 currAuction.value.tokenId,
@@ -311,23 +286,19 @@ class marketplace(sp.Contract):
             )
     
     @sp.entry_point
-    def createlisting(self,params):
+    def createListing(self,params):
         sp.set_type(params, sp.TRecord(
            token= sp.TAddress, 
            tokenId= sp.TNat, 
            amount= sp.TNat, 
-           price= sp.TNat))
-
+           price= sp.TMutez))
         #check atleast one edition is minted
         sp.verify(params.amount > 0)
         
         self._isWhitelisted(params.token)
-
         #Check if the base price is not 0 
-        sp.verify(params.price_per_unit > 0)
-
+        sp.verify(sp.utils.mutez_to_nat(params.price) > 0)
         #whitelisting
-
         self._transferTokens(
             params.token,
             params.tokenId,
@@ -335,7 +306,6 @@ class marketplace(sp.Contract):
             sp.source,
             sp.self_address
         )
-
         self.data.listings[self.data.listingId] = sp.record(
             token= params.token, 
             tokenId= params.tokenId, 
@@ -344,95 +314,86 @@ class marketplace(sp.Contract):
             seller=sp.sender,
         )
         self.data.listingId += 1
-
     
     @sp.entry_point
     def collect(self, _listingId):
-
         sp.set_type(_listingId, sp.TNat)
         self._listingExists(_listingId)
-
         currListing = sp.local('listing', self.data.listings[_listingId])
+        sp.verify(~(sp.source == currListing.value.seller))
 
-        sp.if self.data.listings.contains(_listingId):
-            currSale= sp.local('sale', self.data.listings[_listingId])
-            sp.verify((sp.source == currSale.value.owner) | (sp.source == currListing.value.seller))
-
-            del self.data.listings[_listingId]
-
-            royalty = sp.local('royalty', self.calculatePercentage(sp.record(percentage = self.data.royalty, amount = sp.utils.mutez_to_nat(currSale.value.value))))
-            toTP = sp.local('toTP', 0)
-            toUs = sp.local('toUs', royalty.value)
-            buyer = sp.local('buyer', currSale.value.owner)
-            seller = sp.local('seller', currListing.value.seller)
-            toSeller = sp.utils.mutez_to_nat(currSale.value.value) - royalty.value
-
-            sp.if self.data.royaltyDivision.contains(currListing.value.token):
-                toTP.value = self.calculatePercentage(
-                    sp.record(
-                        percentage = self.data.royaltyDivision[currListing.value.token].toThirdParty,
-                        amount = royalty.value
-                    )
-                )
-                toUs.value = self.calculatePercentage(
-                    sp.record(
-                        percentage = self.data.royaltyDivision[currListing.value.token].toAdmin,
-                        amount = royalty.value
-                    )
-                )
-
-                self._transferTokens(
-                    currListing.value.token,
-                    currListing.value.tokenId,
-                    currListing.value.amount,
-                    sp.self_address,
-                    buyer.value
-                )
-                self._transferRoyalty(
-                    toUs.value,
-                    toTP.value,
-                    self.data.royaltyDivision[currListing.value.token].thirdPartyAdmin
-                )
-                sp.send(
-                    seller.value,
-                    sp.utils.nat_to_mutez(sp.as_nat(toSeller))
-                )
-            
-            sp.else:
-                sp.verify(sp.source == currListing.value.seller)
-
-                del self.data.listings[_listingId]
-
-                self._transferTokens(
-                    currListing.value.token,
-                    currListing.value.tokenId,
-                    currListing.value.amount,
-                    sp.self_address,
-                    currListing.value.seller
-                )
-
-    
-    @sp.entry_point
-    def cancelSale(self, _listingId):
-        sp.set_type(_listingId, sp.TNat)
-        self._listingExists(_listingId)
-        self._ownerOnly(self.data.listings[_listingId].seller, sp.source)
-        self._transferTokens(
-            self.data.listings[_listingId].token,
-            self.data.listings[_listingId].tokenId,
-            self.data.listings[_listingId].amount,
-            sp.self_address,
-            sp.source
-        )
+        val = sp.view(
+            'getToken',
+            self.data.geekyHead,
+            sp.source,
+            t = sp.TNat
+        ).open_some()
         
+        discountPercentage = sp.nat(0)
+        # checking if it is an IAO
+        sp.if self.data.admin == currListing.value.seller: 
+            sp.if val == 3:
+                discountPercentage = sp.nat(20)
+            sp.if val == 2:
+                discountPercentage = sp.nat(10)
+            sp.if val == 1:
+                discountPercentage = sp.nat(5)
+
+        req = sp.as_nat(sp.utils.mutez_to_nat(currListing.value.price) - self.calculatePercentage(sp.record(percentage = discountPercentage, amount = sp.utils.mutez_to_nat(currListing.value.price))))
+        sp.verify(req <= sp.utils.mutez_to_nat(sp.amount))
+
         del self.data.listings[_listingId]
 
+        royalty = sp.local('royalty', self.calculatePercentage(sp.record(percentage = self.data.royalty, amount = req)))
+        toTP = sp.local('toTP', 0)
+        toUs = sp.local('toUs', royalty.value)
+        buyer = sp.local('buyer', sp.source)
+        seller = sp.local('seller', currListing.value.seller)
+        toSeller = req - royalty.value
+
+        sp.if self.data.royaltyDivision.contains(currListing.value.token):
+            toTP.value = self.calculatePercentage(
+                sp.record(
+                    percentage = self.data.royaltyDivision[currListing.value.token].toThirdParty,
+                    amount = royalty.value
+                )
+            )
+            toUs.value = self.calculatePercentage(
+                sp.record(
+                    percentage = self.data.royaltyDivision[currListing.value.token].toAdmin,
+                    amount = royalty.value
+                )
+            )
+
+        self._transferTokens(
+            currListing.value.token,
+            currListing.value.tokenId,
+            currListing.value.amount,
+            sp.self_address,
+            buyer.value
+        )
+        self._transferRoyalty(
+            toUs.value,
+            toTP.value,
+            self.data.royaltyDivision[currListing.value.token].thirdPartyAdmin
+        )
+        sp.send(
+            seller.value,
+            sp.utils.nat_to_mutez(sp.as_nat(toSeller))
+        )
         
-
-
+    
+    # @sp.entry_point
+    # def cancelSale(self, _listingId):
+    #     sp.set_type(_listingId, sp.TNat)
+    #     self._listingExists(_listingId)
+    #     self._ownerOnly(self.data.listings[_listingId].seller, sp.source)
+    #     self._transferTokens(
+    #         self.data.listings[_listingId].token,
+    #         self.data.listings[_listingId].tokenId,
+    #         self.data.listings[_listingId].amount,
+    #         sp.self_address,
+    #         sp.source
+    #     )
         
-
-
-
-
-        
+    #     del self.data.listings[_listingId]
