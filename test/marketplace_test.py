@@ -75,7 +75,7 @@ def test():
     mockup = Mockup.mockup()
     scenario += mockup
 
-    c = Marketplace.marketplace(admin = admin1.address,_royalty =  sp.nat(1), _geekyHeadNFTs = mockup.address)
+    c = Marketplace.marketplace(admin = admin2.address,_royalty =  sp.nat(1), _geekyHeadNFTs = mockup.address)
     scenario += c
     scenario += nft1
     scenario += nft2
@@ -88,18 +88,18 @@ def test():
     c.setAdmin(user1.address).run(sender = user1, valid = False)
 
     # it should update admin
-    c.setAdmin(admin2.address).run(sender = admin1)
+    c.setAdmin(admin1.address).run(sender = admin2)
 
     # --------------- Set Royalty -------------- #
 
     # it should not set royalty percentage if not called by the admin
-    c.setRoyalty(10).run(sender = admin1, valid = False)
+    c.setRoyalty(10).run(sender = admin2, valid = False)
 
     # it should not set royalty if asking more than 100%
-    c.setRoyalty(10000).run(sender = admin2, valid = False)
+    c.setRoyalty(10000).run(sender = admin1, valid = False)
 
     # it should set royalty percentage
-    c.setRoyalty(50).run(sender = admin2) 
+    c.setRoyalty(50).run(sender = admin1) 
 
     # --------------- Set Royalty Divistion -------------- #
 
@@ -117,7 +117,7 @@ def test():
         thirdPartyAdmin = user2.address,
         toThirdParty = 10000,
         toAdmin = 1000
-    )).run(sender = admin2, valid = False)
+    )).run(sender = admin1, valid = False)
 
     # it should set division of royalty
     c.setRoyaltyDivision(sp.record(
@@ -125,7 +125,14 @@ def test():
         thirdPartyAdmin = user2.address,
         toThirdParty = 300,
         toAdmin = 700
-    )).run(sender = admin2)
+    )).run(sender = admin1)
+
+    c.setRoyaltyDivision(sp.record(
+        thirdPartyToken = ft1.address,
+        thirdPartyAdmin = user2.address,
+        toThirdParty = 800,
+        toAdmin = 200
+    )).run(sender = admin1)
 
     # ----------------- Create New Auction --------------
 
@@ -159,7 +166,7 @@ def test():
     )).run(sender = admin1, valid = False)
 
     # it should create new auction with NFT, and transfer token to the vault
-    c.whitelist(nft1.address).run(sender = admin2)
+    c.whitelist(nft1.address).run(sender = admin1)
     c.createAuction(sp.record(
         token = nft1.address, tokenId = 0, amount = sp.nat(1),
         basePrice = sp.mutez(100000), timePeriod = sp.int(86400)
@@ -169,7 +176,7 @@ def test():
     scenario.verify(nft1.data.ledger[nft1.ledger_key.make(admin1.address, 0)].balance == 0)
 
     # it should create new auction with FT, and transfer token to the vault
-    c.whitelist(ft1.address).run(sender = admin2)
+    c.whitelist(ft1.address).run(sender = admin1)
     setOperator(ft1, admin1, c, 0)
     c.createAuction(sp.record(
         token = ft1.address, tokenId = 0, amount = sp.nat(100000),
@@ -261,7 +268,6 @@ def test():
     )).run(sender = user1, valid = False)
 
     #It should create a listing with a NFT and transfer it to the vault
-
     setOperator(nft1, admin1, c, 1)
     c.createListing(sp.record(
         token= nft1.address, tokenId=1, amount = sp.nat(1), price = sp.mutez(100000)
@@ -270,8 +276,7 @@ def test():
     scenario.verify(nft1.data.ledger[nft1.ledger_key.make(admin1.address, 1)].balance == 0)
 
     #It should create a listing with a FT and transfer it to the vault
-
-    c.whitelist(ft1.address).run(sender = admin2)
+    c.whitelist(ft1.address).run(sender = admin1)
     setOperator(ft1, admin1, c, 1)
     c.createListing(sp.record(
         token = ft1.address, tokenId = 1, amount = sp.nat(100000), price = sp.mutez(100)
@@ -280,3 +285,36 @@ def test():
     scenario.verify(ft1.data.ledger[ft1.ledger_key.make(c.address, 1)].balance == 100000)
 
     #-----------------Buy----------------
+
+    # it should not buy item if called by the item owner
+    c.collect(1).run(sender = admin1, valid = False)
+
+    # it should not buy item is insufficient amount is sent    
+    c.collect(1).run(sender = user1, amount = sp.mutez(10),valid = False)
+
+    # it should not apply any discount if not geekyhead nft held
+    c.collect(1).run(sender = user1, amount = sp.mutez(99), valid = False)
+
+    # it should buy token, should not apply any discount if no token is held by the the buyer, transfer the nft to the buyer and tranfer tez to seller and transfer royalty
+    c.collect(1).run(sender = user1, amount = sp.mutez(100), valid = True)
+
+    # it should buy token from initial offering, should apply discount if token is held by the buyer
+    mockup.setValue(sp.nat(3))
+    c.collect(0).run(sender = user1, amount = sp.mutez(80000), valid = True)
+    scenario.verify(nft1.data.ledger[nft1.ledger_key.make(user1.address, 1)].balance == 1)
+
+    # it should buy token and not apply any discount if not IAO
+    setOperator(nft1, user1, c, 1)
+    c.createListing(sp.record(
+        token = nft1.address, tokenId = 1, amount = sp.nat(1), price = sp.mutez(100000)
+    )).run(sender = user1)
+    c.collect(2).run(sender = user2, amount = sp.mutez(80000), valid = False)
+
+    # -------------- Cancel listing --------------
+
+    # it should not cancel listing if it does not exist
+
+    # it should not cancel listing if not  called by the item owner
+
+    # it should cancel listing, return the assets and delete this entry from the map 
+

@@ -255,18 +255,24 @@ class marketplace(sp.Contract):
                         amount = royalty.value
                     )
                 )
+                self._transferRoyalty(
+                    toUs.value,
+                    toTP.value,
+                    self.data.royaltyDivision[currAuction.value.token].thirdPartyAdmin
+                )
+            sp.else :
+                self._transferRoyalty(
+                    toUs.value,
+                    toTP.value,
+                    self.data.admin
+                )
+
             self._transferTokens(
                 currAuction.value.token, 
                 currAuction.value.tokenId,
                 currAuction.value.amount,
                 sp.self_address,
                 buyer.value
-            )
-            
-            self._transferRoyalty(
-                toUs.value, 
-                toTP.value,
-                self.data.royaltyDivision[currAuction.value.token].thirdPartyAdmin
             )
             sp.send(
                 seller.value,
@@ -322,24 +328,26 @@ class marketplace(sp.Contract):
         currListing = sp.local('listing', self.data.listings[_listingId])
         sp.verify(~(sp.source == currListing.value.seller))
 
-        val = sp.view(
-            'getToken',
-            self.data.geekyHead,
-            sp.source,
-            t = sp.TNat
-        ).open_some()
-        
-        discountPercentage = sp.nat(0)
-        # checking if it is an IAO
-        sp.if self.data.admin == currListing.value.seller: 
-            sp.if val == 3:
-                discountPercentage = sp.nat(20)
-            sp.if val == 2:
-                discountPercentage = sp.nat(10)
-            sp.if val == 1:
-                discountPercentage = sp.nat(5)
+        discountPercentage = sp.local('discountPercentage',sp.nat(0))
 
-        req = sp.as_nat(sp.utils.mutez_to_nat(currListing.value.price) - self.calculatePercentage(sp.record(percentage = discountPercentage, amount = sp.utils.mutez_to_nat(currListing.value.price))))
+        # checking if it is an IAO
+        sp.if self.data.admin == currListing.value.seller:
+            val = sp.view(
+                'getToken',
+                self.data.geekyHead,
+                sp.source,
+                t = sp.TNat
+            ).open_some()
+            sp.if val == sp.nat(3):
+                discountPercentage.value = sp.nat(200)
+            sp.if val == sp.nat(2):
+                discountPercentage.value = sp.nat(100)
+            sp.if val == sp.nat(1):
+                discountPercentage.value = sp.nat(50)
+
+        discount = sp.local('discount',self.calculatePercentage(sp.record(percentage = discountPercentage.value, amount = sp.utils.mutez_to_nat(currListing.value.price))))
+
+        req = sp.as_nat(sp.utils.mutez_to_nat(currListing.value.price) - discount.value)
         sp.verify(req <= sp.utils.mutez_to_nat(sp.amount))
 
         del self.data.listings[_listingId]
@@ -364,6 +372,17 @@ class marketplace(sp.Contract):
                     amount = royalty.value
                 )
             )
+            self._transferRoyalty(
+                toUs.value,
+                toTP.value,
+                self.data.royaltyDivision[currListing.value.token].thirdPartyAdmin
+            )
+        sp.else : 
+            self._transferRoyalty(
+                toUs.value,
+                toTP.value,
+                self.data.admin
+            )
 
         self._transferTokens(
             currListing.value.token,
@@ -371,11 +390,6 @@ class marketplace(sp.Contract):
             currListing.value.amount,
             sp.self_address,
             buyer.value
-        )
-        self._transferRoyalty(
-            toUs.value,
-            toTP.value,
-            self.data.royaltyDivision[currListing.value.token].thirdPartyAdmin
         )
         sp.send(
             seller.value,
